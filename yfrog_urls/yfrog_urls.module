@@ -256,11 +256,10 @@ function theme_yfrog_urls_image($url, $mode, $link) {
 function theme_yfrog_urls_video($url, $mode, $link) {
   switch ($mode) {
     case 'embed':
-
-      // Embedding http://yfrog.us/0u6mcz:iphone seems not to work.
-      //return '<embed src="http://img30.imageshack.us/flvplayer.swf?f=P6mc" width="480" height="338" allowFullScreen="true" wmode="transparent" type="application/x-shockwave-flash"/>';
-      $embed ="<embed src=\"$url:iphone\" alt=\"$url\" allowFullScreen=\"true\" wmode=\"transparent\" type=\"application/x-shockwave-flash\"/>";
-      return ($link) ? $embed . l(t('to video'), $url) : $embed;
+      // Embedding http://yfrog.us/0u6mcz:iphone seems not to work,
+      // so show frame with link to direct video file.
+      $image = theme('image', $url .':frame', $url, $url, NULL, FALSE);
+      return ($link) ? l($image, $url .':iphone', array('html' => TRUE, 'attributes' => array('target' => '_blank'))) : $image;
     case 'thumb':
       $image = theme('image', $url .'.th.jpg', $url, $url, NULL, FALSE);
       return ($link) ? l($image, $url, array('html' => TRUE)) : $image;
