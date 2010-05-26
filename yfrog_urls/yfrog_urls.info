@@ -1,0 +1,5 @@
+; $Id$
+name = YFrog URLs
+description = Provides a input filter to convert yfrog-urls to links, images or videos.
+core = 6.x
+version = dev

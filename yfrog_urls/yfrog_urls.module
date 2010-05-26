@@ -1,0 +1,274 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ *  Provide an input filter to convert yFrog-URLs to images, links or videos.
+ *  @see http://code.google.com/p/imageshackapi/wiki/YFROGurls
+ */
+
+/**
+ * Implementation of hook_filter().
+ */
+function yfrog_urls_filter($op, $delta = 0, $format = -1, $text = '', $cache_id = 0) {
+  switch ($op) {
+    case 'no cache':
+      return TRUE; // only for testing
+    case 'list':
+      return array(0 => t('yfrog filter'));
+    case 'description':
+      return t('Allows users to embed yfrog images and videos via URL.');
+    case 'prepare':
+      return _yfrog_urls_filter_prepare($text, $format);
+    case 'process':
+      return _yfrog_urls_filter_process($text, $format);
+    case 'settings':
+      return _yfrog_urls_filter_settings($format);
+    default:
+      return $text;
+  }
+}
+
+/**
+ * Implementation of hook_theme().
+ */
+function yfrog_urls_theme() {
+  return array(
+    'yfrog_urls_image' => array(
+      'arguments' => array('url' => NULL, 'mode' => NULL, 'link' => NULL),
+    ),
+    'yfrog_urls_video' => array(
+      'arguments' => array('url' => NULL, 'mode' => NULL, 'link' => NULL),
+    ),
+    'yfrog_urls_other' => array(
+      'arguments' => array('url' => NULL, 'mode' => NULL, 'link' => NULL),
+    ),
+  );
+}
+
+/**
+ * Theme function for image urls.
+ */
+function theme_yfrog_urls_image($url, $mode, $link) {
+  switch ($mode) {
+    case 'embed':
+      $image = theme('image', $url .':iphone', $url, $url, NULL, FALSE);
+      return ($link) ? l($image, $url, array('html' => TRUE)) : $image;
+    case 'thumb':
+      $image = theme('image', $url .'.th.jpg', $url, $url, NULL, FALSE);
+      return ($link) ? l($image, $url, array('html' => TRUE)) : $image;
+    default:
+      return ($link) ? l($url, $url) : check_plain($url);
+  }
+}
+/**
+ * Theme function for video urls.
+ */
+function theme_yfrog_urls_video($url, $mode, $link) {
+  switch ($mode) {
+    case 'embed':
+      return '<embed src="http://img30.imageshack.us/flvplayer.swf?f=P6mc" width="480" height="338" allowFullScreen="true" wmode="transparent" type="application/x-shockwave-flash"/>';
+      $embed ="<embed src=\"$url:iphone\" alt=\"$url\" allowFullScreen=\"true\" wmode=\"transparent\" type=\"application/x-shockwave-flash\"/>";
+      return ($link) ? l($image, $url, array('html' => TRUE)) : $image;
+    case 'thumb':
+      $image = theme('image', $url .'.th.jpg', $url, $url, NULL, FALSE);
+      return ($link) ? l($image, $url, array('html' => TRUE)) : $image;
+    case 'frame':
+      $image = theme('image', $url .':frame', $url, $url, NULL, FALSE);
+      return ($link) ? l($image, $url, array('html' => TRUE)) : $image;
+    default:
+      return ($link) ? l($url, $url) : check_plain($url);
+  }
+}
+/**
+ * Theme function for other urls.
+ */
+function theme_yfrog_urls_other($url, $mode, $link) {
+  switch ($mode) {
+    default:
+      return ($link) ? l($url, $url) : check_plain($url);
+  }
+}
+
+/*
+ * yfrog input filter settings form.
+ */
+function _yfrog_urls_filter_settings($format) {
+  $form['yfrog_urls'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('yfrog urls'),
+    '#collapsible' => TRUE,
+  );
+
+  $types = _yfrog_urls_content_types();
+  // Settings for each type
+  foreach ($types as $char => $info) {
+    $form['yfrog_urls'][$char] = array(
+      '#type' => 'fieldset',
+      '#title' => $info['title'],
+      '#description' => $info['description'],
+      '#collapsible' => TRUE,
+    );
+    $id = "yfrog_urls_filter_$char-$format";
+    $form['yfrog_urls'][$char]["yfrog_urls_filter_$char-$format-link"] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Link to yfrog'),
+      '#default_value' => variable_get("$id-link", TRUE),
+    );
+    $form['yfrog_urls'][$char]["yfrog_urls_filter_$char-$format-theme"] = array(
+      '#type'=> 'value',
+      '#value' => variable_get("$id-theme", $info['theme']),
+    );
+    $form['yfrog_urls'][$char]["yfrog_urls_filter_$char-$format-mode"] = array(
+      '#type'=> 'select',
+      '#title' => t('Display mode'),
+      '#default_value' => variable_get("$id-mode", ''),
+      '#options' => $info['modes'],
+    );
+    $form['yfrog_urls'][$char]["yfrog_urls_filter_$char-$format-overwrite"] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Overwrite specifier'),
+      '#default_value' => variable_get("$id-overwrite", FALSE),
+      '#description' => t('Check this, to ignore appended specifiers (:frame, :iphone, .th.jpg)'),
+    );
+  }
+  return $form;
+}
+
+/**
+ * Prepare text for yfrog urls filter.
+ */
+function _yfrog_urls_filter_prepare($text, $format) {
+  $text = ' '. $text;
+  // Regular expression for extracting yfrog URLs.
+  $regexp = "`(<h[1-9]>|<p>|<li>|<br\s*/?>|[ \n\r\t\(])http://((www\.)?yfrog\.(com|us|ru|com\.tr|it|co\.il|co\.uk|com\.pl|pl|eu)/[A-z0-9]+[jpbtgsdfzx](:frame|:iphone|\.th\.jpg)?)`i";
+  // Convert to yfrog:// URLs
+  $text = preg_replace($regexp, '$1yfrog://$2', $text);
+  $text = substr($text, 1, -1);
+  return $text;
+}
+
+/**
+ * Process text for yfrog urls filter.
+ */
+function _yfrog_urls_filter_process($text, $format) {
+  $regexps = "`yfrog://(www\.)?(yfrog\.(com|us|ru|com\.tr|it|co\.il|co\.uk|com\.pl|pl|eu)/[A-z0-9]+[jpbtgsdfzx])(:frame|:iphone|\.th\.jpg)?`i";
+  // Set format
+  _yfrog_urls_filter_process_regexp_callback(NULL, $format);
+  $text = preg_replace_callback($regexps, '_yfrog_urls_filter_process_regexp_callback', $text);
+  return $text;
+}
+
+function _yfrog_urls_filter_process_regexp_callback($matches, $new_format = NULL) {
+  static $format;
+
+  if (isset($new_format)) {
+    $format = $new_format;
+    return ;
+  }
+
+  if (!isset($matches[2])) return '';
+
+  $url = 'http://'. $matches[2];
+  $content_type = substr($url,-1, 1);
+
+  $link = variable_get("yfrog_urls_filter_$content_type-$format-link", TRUE);
+  $theme = variable_get("yfrog_urls_filter_$content_type-$format-theme", 'yfrog_urls_other');
+  $mode = variable_get("yfrog_urls_filter_$content_type-$format-mode", '');
+
+  // If a specificier is given, and settings are not to overwrite, change the mode.
+  if (isset($matches[4]) && !variable_get("yfrog_urls_filter_$content_type-$format-overwrite", FALSE)) {
+    switch ($matches[4]) {
+      case ':frame':
+        $mode = 'frame'; break;
+      case ':iphone':
+        $mode = 'embed'; break;
+      case '.th.jpg':
+        $mode = 'thumb'; break;
+    }
+  }
+
+  return theme($theme, $url, $mode, $link);
+}
+
+/**
+ * Content type container for yfrog_urls.
+ */
+function _yfrog_urls_content_types($type = NULL) {
+  static $types;
+
+  if (empty($types)) {
+    $image_modes = array(
+      '' => t('plain url'),
+      'thumb' => t('thumb'),
+      'embed' => t('embed'),
+    );
+    $video_modes = array(
+      '' => t('plain url'),
+      'thumb' => t('thumb'),
+      'embed' => t('embed'),
+      'frame' => t('frame'),
+    );
+    $other_modes = array(
+      '' => t('plain url'),
+    );
+
+    $types = array(
+      'j' => array(
+        'title' => 'JPG',
+        'theme' => 'yfrog_urls_image',
+        'modes' => $image_modes,
+      ),
+      'p' => array(
+        'title' => 'PNG',
+        'theme' => 'yfrog_urls_image',
+        'modes' => $image_modes,
+      ),
+      'b' => array(
+        'title' => 'BMP',
+        'theme' => 'yfrog_urls_image',
+        'modes' => $image_modes,
+      ),
+      't' => array(
+        'title' => 'TIFF',
+        'theme' => 'yfrog_urls_image',
+        'modes' => $image_modes,
+      ),
+      'g' => array(
+        'title' => 'GIF',
+        'theme' => 'yfrog_urls_image',
+        'modes' => $image_modes,
+      ),
+      's' => array(
+        'title' => 'SWF',
+        'theme' => 'yfrog_urls_other',
+        'modes' => $other_modes,
+      ),
+      'd' => array(
+        'title' => 'PDF',
+        'theme' => 'yfrog_urls_other',
+        'modes' => $other_modes,
+      ),
+      'f' => array(
+        'title' => 'FLV',
+        'theme' => 'yfrog_urls_video',
+        'modes' => $video_modes,
+      ),
+      'z' => array(
+        'title' => 'Videos (flv)',
+        'theme' => 'yfrog_urls_video',
+        'modes' => $video_modes,
+      ),
+      'x' => array(
+        'title' => 'Gallery',
+        'theme' => 'yfrog_urls_other',
+        'modes' => $other_modes,
+      ),
+    );
+  }
+
+  if (isset($type)) {
+    return $types[$type];
+  }
+  return $types;
+}
